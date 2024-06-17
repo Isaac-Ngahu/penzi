@@ -1,6 +1,6 @@
 from db import mydb, check_if_user_exists, insert_initial_message, create_user, insert_message, add_user_details, \
     record_description, fetch_match_count, insert_match, get_matches, fetch_gender, fetch_next_matches, \
-    fetch_next_occurrences, fetch_user_details, fetch_description
+    fetch_next_occurrences, fetch_user_details, fetch_description, get_requestor_number
 import threading
 import time
 kenyan_counties = [
@@ -217,17 +217,17 @@ E.g., match#23-25#Nairobi"""
         next_occurrences_counter = len(next_occurrences)+1
         insert_match(user_number=valid_number,request=matches,page_number= 2 if len(next_occurrences)==1 else next_occurrences_counter )
         return matches
-    if "describe" in message and len(user_exists)>1 and:
+    if "describe" in message and len(user_exists)>1 and ("07" in message or "01" in message):
         insert_message(sender=valid_number,receiver="22141",message=message)
         requested_number = message.replace("describe","").strip()
         name,description = fetch_description(requested_number)
         response = f"""{name} describes themselves as {description}"""
         return response
-    if number_is_valid and len(user_exists)>1 and ("07" in message or "01" in message) and "describe" not in message:
+    if number_is_valid and len(user_exists)>1 and ("07" in message or "01" in message) and len(message)==10:
         insert_message(sender=valid_number,receiver="22141",message=message)
         user_details = fetch_user_details(message)
         number,name,age,gender,county,city,level_of_education,profession,marital_status,ethnicity,religion = user_details
-        response = f"""{name} aged {age}, {county} county, {city} town, {level_of_education}, {profession}, {marital_status}, {ethnicity}, {religion}"""
+        response = f"""{name} aged {age}, {county} county, {city} town, {level_of_education}, {profession}, {marital_status}, {ethnicity}, {religion}.  Send DESCRIBE 0702556677 to get more details."""
         requestor_details = fetch_user_details(valid_number)
         requestor_number,requestor_name,requestor_age,requestor_gender,requestor_county,requestor_city,requestor_level_of_education,requestor_profession,requestor_marital_status,requestor_ethnicity,requestor_religion = requestor_details
         inform_requested_message = f"""Hi {name} a {"man" if requestor_gender=="male" else "lady"}  is interested in you and requested your details.
@@ -235,6 +235,12 @@ E.g., match#23-25#Nairobi"""
         Do you want to know more about {"him"if requestor_gender=="male"else"her"}? Send YES to 22141"""
         insert_message(sender="22141",receiver=valid_number,message=response)
         insert_message(sender="22141",receiver=number,message=inform_requested_message)
+        return response
+    if message=="yes":
+        insert_message(sender=valid_number,receiver="22141",message=message)
+        requestor_number = get_requestor_number(valid_number)
+        number,name,age,gender,county,city,level_of_education,profession,marital_status,ethnicity,religion=fetch_user_details(requestor_number)
+        response = f"""{name} aged {age}, {county} county, {city} town, {level_of_education}, {profession}, {marital_status}, {ethnicity}, {religion}.  Send DESCRIBE 0702556677 to get more details."""
         return response
 
 

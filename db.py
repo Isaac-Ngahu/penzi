@@ -200,7 +200,16 @@ def fetch_description(number):
   finally:
     mycursor.close()
 
-
+def get_requestor_number(number):
+  sql = "SELECT sender FROM message WHERE message=%s ORDER BY TimeSent DESC"
+  value = (number,)
+  mycursor = mydb.cursor()
+  try:
+    mycursor.execute(sql, value)
+    sender = mycursor.fetchall()
+    return sender[0][0]
+  finally:
+    mycursor.close()
 
 
 print(fetch_next_matches("0722294848","male"))
