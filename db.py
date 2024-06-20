@@ -14,8 +14,8 @@ def check_if_user_exists(number):
   mycursor = mydb.cursor()
   try:
     mycursor.execute(sql, value)
-    result = mycursor.fetchone()
-    return result
+    result = mycursor.fetchall()
+    return True if len(result)==1 else False
   finally:
     mycursor.close()
 
@@ -96,13 +96,13 @@ def fetch_gender(number):
 def fetch_match_count(message,gender):
   activator,age_range,county = message.split("#")
   start_age,end_age = age_range.split("-")
-  sql_q = "SELECT Name,Age,Number FROM user WHERE COUNTY=%s AND Age BETWEEN %s AND %s AND Gender=%s"
+  sql_q = "SELECT Name,Age,Number FROM user WHERE COUNTY=%s AND Age BETWEEN %s AND %s AND Gender=%s ORDER BY TImeCreated DESC"
   vals = (county, start_age, end_age,"female" if gender=="male" else "male")
   mycursor = mydb.cursor()
   try:
     mycursor.execute(sql_q, vals)
     results = mycursor.fetchall()
-    return (len(results), gender,results)
+    return  gender,results
   finally:
     mycursor.close()
 
@@ -119,7 +119,7 @@ def insert_match(user_number,request,page_number):
 def get_matches(message,gender):
   activator, age_range, county = message.split("#")
   start_age, end_age = age_range.split("-")
-  sql1 = "SELECT Name,Age,Number FROM user WHERE Gender=%s AND Age BETWEEN %s AND %s"
+  sql1 = "SELECT Name,Age,Number FROM user WHERE Gender=%s AND Age BETWEEN %s AND %s ORDER BY TImeCreated DESC"
   values1 = ("female"if gender == "male" else "male", start_age, end_age)
   mycursor = mydb.cursor()
   try:
@@ -184,7 +184,7 @@ def fetch_user_details(number):
   mycursor = mydb.cursor()
   try:
     mycursor.execute(sql,values)
-    details = mycursor.fetchone()
+    details = mycursor.fetchall()
     return details
   finally:
     mycursor.close()
@@ -212,4 +212,23 @@ def get_requestor_number(number):
     mycursor.close()
 
 
-print(fetch_next_matches("0722294848","male"))
+def check_for_requestor(number):
+  sql = "SELECT sender, message FROM message WHERE message = %s"
+  value = (number,)
+  mycursor = mydb.cursor()
+  try:
+    mycursor.execute(sql, value)
+    sender = mycursor.fetchall()
+    if len(sender) > 0:
+      sql = "SELECT Name, Age, County FROM user WHERE Number = %s"
+      value = (number,)
+      mycursor.execute(sql, value)
+      details = mycursor.fetchall()
+      if len(details) > 0 and len(details[0]) == 3:
+        return True, details[0]
+    return False, []
+  finally:
+    mycursor.close()
+
+
+print(len(fetch_user_details("0769272873")))
