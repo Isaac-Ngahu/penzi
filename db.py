@@ -15,7 +15,9 @@ def check_if_user_exists(number):
   try:
     mycursor.execute(sql, value)
     result = mycursor.fetchall()
-    return True if len(result)==1 else False
+    if len(result) == 1:
+      return True
+    return False
   finally:
     mycursor.close()
 
@@ -195,8 +197,10 @@ def fetch_description(number):
   mycursor = mydb.cursor()
   try:
     mycursor.execute(sql,value)
-    description = mycursor.fetchone()
-    return description
+    description = mycursor.fetchall()
+    if len(description)==1:
+      return description
+    return []
   finally:
     mycursor.close()
 
@@ -221,7 +225,7 @@ def check_for_requestor(number):
     sender = mycursor.fetchall()
     if len(sender) > 0:
       sql = "SELECT Name, Age, County FROM user WHERE Number = %s"
-      value = (number,)
+      value = (sender[0][0],)
       mycursor.execute(sql, value)
       details = mycursor.fetchall()
       if len(details) > 0 and len(details[0]) == 3:
@@ -231,4 +235,5 @@ def check_for_requestor(number):
     mycursor.close()
 
 
-print(len(fetch_user_details("0769272873")))
+print(type(get_requestor_number("0788378499")))
+# print(fetch_user_details(str(0742292991)))

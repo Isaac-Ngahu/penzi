@@ -13,6 +13,14 @@ CORS(app)
 def check_user_progress(number):
     user_details = fetch_user_details(number)
     has_requestor,requestor_details = check_for_requestor(number)
+    if has_requestor and len(requestor_details)>0:
+        requestor_name, requestor_age, requestor_county = requestor_details
+        user_details = fetch_user_details(number)
+        response = f"""Hi {user_details[0][1]}, {requestor_name} is interested in you and requested your details.
+     aged {requestor_age} based in {requestor_county}.
+    Do you want to know more? Send YES to 22141"""
+        insert_message(sender="22141", receiver=number, message=response)
+        return response
     if len(user_details) == 1 and len(user_details[0][1]) > 1 and user_details[0][6] is None:
         response = """You were registered for dating with your initial details.
     To search for a MPENZI, SMS match#age#town to 22141 and meet the person of 
@@ -20,13 +28,11 @@ def check_user_progress(number):
     E.g., match#23-25#Nairobi"""
         insert_message(sender="22141", receiver=number, message=response)
         return response
-    if has_requestor and len(requestor_details) == 0:
-        requestor_name, requestor_age, requestor_county = requestor_details[0]
-        user_details = fetch_user_details(number)
-        response = f"""Hi {user_details[0][1]}, {requestor_name} is interested in you and requested your details.
- aged {requestor_age} based in {requestor_county}.
-Do you want to know more? Send YES to 22141"""
-        insert_message(sender="22141", receiver=number, message=response)
+    if len(user_details) == 1 and len(user_details[0])==11:
+        response = """You are fully registered for dating.
+                    To search for a MPENZI, SMS match#age#town to 22141 and meet the person of 
+your dreams.
+E.g., match#23-25#Kisumu"""
         return response
     return "no updates"
 
@@ -36,10 +42,12 @@ Do you want to know more? Send YES to 22141"""
 def return_message(number):
     try:
         is_valid, valid_number = number_checker(number)
-        if is_valid and request.is_json:
+        if is_valid:
             response = check_user_progress(valid_number)
             print(response)
             return jsonify({"update": response})
+        else:
+            return jsonify({"update": "Invalid number"})
     except Exception as e:
         return jsonify({"update": str(e)})
 

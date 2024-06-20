@@ -85,7 +85,7 @@ def validate_details(message):
 def number_checker(number):
     if "+254" in number and len(number.replace("+254","0"))==10:
         return True,number.replace("+254","0")
-    if len(number)==10 and (number[:2] == "07" or number[:2] == "01"):
+    if len(number)==10 and "07" or "01" in number:
         return True,number
     return False,"number not valid"
 def send_first_message(number):
@@ -126,11 +126,11 @@ def get_number_of_matches(message,gender):
     gender,results = fetch_match_count(message,gender)
     if len(results) == 0:
         response = "No matches found for your request."
-        return response
+        return response,[]
     else:
         response = f"""We have {len(results)} {"ladies" if gender.strip()=="male"else"men"} who match your choice! We will send you details of them 
 shortly.
-To get more details about a {"lady" if gender.strip()=="male"else"male"}, SMS her number e.g., 0722010203 to 22141"""
+To get more details about a {"lady" if gender.strip()=="male"else"male"}, SMS {"his" if gender.strip()=="male"else"her"} number e.g., 0722010203 to 22141"""
         return response,results
 
 def store_results(results):
@@ -148,7 +148,7 @@ def send_first_three(results):
         for match in first_three:
             match_info = f"{match[0]} aged {match[1]}, {match[2]}"
             matches.append(match_info)
-        response = f"""{matches[0]} {matches[1]} {matches[2]} Send NEXT to 22141 to receive details of the remaining {len(results)-3} ladies"""
+        response = f"""{matches[0]} {matches[1]} {matches[2]} Send NEXT to 22141 to receive details of the remaining {len(results)-3} matches"""
         # time.sleep(5)
         return response
 def get_next_matches(number,gender):
@@ -210,8 +210,10 @@ def message_router(message,number):
         insert_match(user_number=valid_number,request=message,page_number=1)
         gender = fetch_gender(valid_number)
         resp1,results = get_number_of_matches(message,gender[0])
-        resp2 = send_first_three(results)
-        return  resp1 + " " + resp2
+        if len(results)>0:
+            resp2 = send_first_three(results)
+            return resp1 + " " + resp2
+        return  resp1
     if message=="next" and user_exists and number_is_valid:
         insert_message(sender=valid_number,receiver="222141",message=message)
         next_occurrences = fetch_next_occurrences(valid_number)
@@ -224,9 +226,13 @@ def message_router(message,number):
     if "describe" in message and user_exists and ("07" in message or "01" in message):
         insert_message(sender=valid_number,receiver="22141",message=message)
         requested_number = message.replace("describe","").strip()
-        name,description = fetch_description(requested_number)
-        response = f"""{name} describes themselves as {description}"""
-        return response
+        name_and_description = fetch_description(requested_number)
+        if len(name_and_description)==1:
+            name,description = name_and_description[0]
+            response = f"""{name} describes themselves as {description}"""
+            return response
+        else:
+            return "user not found"
     if len(message)==10 and user_exists and number_is_valid and ("07" in message or "01" in message):
         insert_message(sender=valid_number,receiver="22141",message=message)
         user_details = fetch_user_details(message)
@@ -255,8 +261,9 @@ Do you want to know more? Send YES to 22141"""
     if message=="yes" and has_requestor:
         insert_message(sender=valid_number,receiver="22141",message=message)
         requestor_number = get_requestor_number(valid_number)
-        number,name,age,gender,county,city,level_of_education,profession,marital_status,ethnicity,religion=fetch_user_details(requestor_number)
-        response = f"""{name} aged {age}, {county} county, {city} town, {level_of_education}, {profession}, {marital_status}, {ethnicity}, {religion}.  Send DESCRIBE 0702556677 to get more details."""
+        user_details = fetch_user_details(requestor_number)
+        number,name,age,gender,county,city,level_of_education,profession,marital_status,ethnicity,religion = user_details[0]
+        response = f"""{name} aged {age}, {county} county, {city} town, {level_of_education}, {profession}, {marital_status}, {ethnicity}, {religion}.  Send DESCRIBE {number} to get more details."""
         return response
     if user_exists and len(user_details)==1 and len(user_details[0][1])>1 and user_details[0][6] is None:
         response = """You were registered for dating with your initial details.
@@ -265,7 +272,8 @@ your dreams.
 E.g., match#23-25#Nairobi"""
         insert_message(sender="22141", receiver=valid_number, message=response)
         return response
-    return "please enter message in the correct format"
+    return "please check if the number or the message you have entered is in the correct format"
 
-print(get_number_of_matches("match#20-30#kisumu","femalemale"))
-print(get_next_matches("0725467800","male"))
+print(get_number_of_matches("match#23-25#nairobi","female"))
+# print(get_next_matches("0725467800","male"))
+# print(number_checker("0725635435"))
