@@ -1,8 +1,7 @@
 from db import mydb, check_if_user_exists, insert_initial_message, create_user, insert_message, add_user_details, \
     record_description, fetch_match_count, insert_match, get_matches, fetch_gender, fetch_next_matches, \
     fetch_next_occurrences, fetch_user_details, fetch_description, get_requestor_number, check_for_requestor
-import threading
-import time
+import requests
 kenyan_counties = [
         "mombasa",
         "kwale",
@@ -58,7 +57,7 @@ def validate_registration(message):
 
     msg_array = message.split('#')
     if " " not in msg_array[1]:
-        return False,"please enter first and last name"
+        return False,"please enter first and last name as in the example given"
     if len(msg_array) != 6:
         response = "please enter all details"
         return False,response
@@ -66,11 +65,11 @@ def validate_registration(message):
         int(msg_array[2])
     except ValueError:
         return False,"please enter a valid age"
-    if msg_array[4] not in kenyan_counties:
-        return False,"please enter a valid county"
     if msg_array[3] not in ["male","female"]:
         response = "please enter valid gender"
         return False,response
+    if msg_array[4] not in kenyan_counties:
+        return False,"please enter a valid county"
     return True,"valid"
 def validate_details(message):
     msg_array = message.split('#')
@@ -123,7 +122,7 @@ E.g., match#23-25#Kisumu"""
     return response
 
 def get_number_of_matches(message,gender):
-    gender,results = fetch_match_count(message,gender)
+    results = fetch_match_count(message,gender)
     if len(results) == 0:
         response = "No matches found for your request."
         return response,[]
@@ -166,7 +165,7 @@ def get_next_matches(number,gender):
                         {matches[1]} 
                         {matches[2]}"""
         return response
-    if len(results)>6 and page_times_three<=results_length:
+    if len(results)>=6 and page_times_three<=results_length:
         start_point = page*3
         end_point = start_point+3
         next_three = results[start_point:end_point]
@@ -177,6 +176,27 @@ def get_next_matches(number,gender):
         response = f"""{matches[0]}\n{matches[1]}\n{matches[2]}"""
         return response
     return "no more matches"
+
+def send_payment_request():
+    url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+    data = {
+    "BusinessShortCode": 174379,
+    "Password": "MTc0Mzc5YmZiMjc5ZjlhYTliZGJjZjE1OGU5N2RkNzFhNDY3Y2QyZTBjODkzMDU5YjEwZjc4ZTZiNzJhZGExZWQyYzkxOTIwMjQwNjIxMTEzNDMx",
+    "Timestamp": "20240621113431",
+    "TransactionType": "CustomerPayBillOnline",
+    "Amount": 50,
+    "PartyA": 254705832092,
+    "PartyB": 174379,
+    "PhoneNumber": 254705832092,
+    "CallBackURL": "https://mydomain.com/path",
+    "AccountReference": "HustlerFund",
+    "TransactionDesc": "Payment of X"
+  }
+    session = requests.session()
+    session.headers.update({'Content-Type': 'application/json',
+                            'Authorization': 'Bearer dfYgtAACDRGIAscYkVp8AI44VGEz'})
+    response = session.post(url, json=data)
+    return response
 
 def message_router(message,number):
     number_is_valid,valid_number=number_checker(number)
@@ -206,6 +226,8 @@ def message_router(message,number):
         response = update_description(valid_number,message)
         return response
     if "#" in message and "match" in message and user_exists and len(message.split('#')) == 3 and '-' in message.split('#')[1] and message.split('#')[2] in kenyan_counties:
+        response = send_payment_request()
+        print(response.json())
         insert_message(sender=valid_number,receiver="22141",message=message)
         insert_match(user_number=valid_number,request=message,page_number=1)
         gender = fetch_gender(valid_number)
@@ -221,7 +243,8 @@ def message_router(message,number):
         matches = get_next_matches(valid_number,gender[0])
         insert_message(sender="22141",receiver=valid_number,message=matches)
         next_occurrences_counter = len(next_occurrences)+1
-        insert_match(user_number=valid_number,request=matches,page_number= 2 if len(next_occurrences)==1 else next_occurrences_counter )
+        if not matches == "no more matches":
+            insert_match(user_number=valid_number,request=matches,page_number= 2 if len(next_occurrences)==1 else next_occurrences_counter )
         return matches
     if "describe" in message and user_exists and ("07" in message or "01" in message):
         insert_message(sender=valid_number,receiver="22141",message=message)

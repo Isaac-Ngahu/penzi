@@ -104,7 +104,7 @@ def fetch_match_count(message,gender):
   try:
     mycursor.execute(sql_q, vals)
     results = mycursor.fetchall()
-    return  gender,results
+    return  results
   finally:
     mycursor.close()
 
@@ -150,15 +150,14 @@ def fetch_next_matches(number,gender):
       start_age, end_age = age_range.split("-")
       mycursor.close()
       mycursor = mydb.cursor()
-      sql1 = "SELECT Name, Age, Number FROM user WHERE Gender = %s AND Age BETWEEN %s AND %s"
-      values1 = ("female" if gender == "male" else "male", start_age, end_age)
+      sql1 = "SELECT Name,Age,Number FROM user WHERE COUNTY=%s AND Age BETWEEN %s AND %s AND Gender=%s ORDER BY TImeCreated desc"
+      values1 = (county,start_age,end_age,"female" if gender == "male" else "male")
       mycursor.execute(sql1, values1)
 
       results = mycursor.fetchall()
 
       return results, page
   finally:
-    # Ensure the cursor is closed if it hasn't been already
     if mycursor:
       mycursor.close()
 
