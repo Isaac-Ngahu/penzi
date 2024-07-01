@@ -1,6 +1,9 @@
 from db import mydb, check_if_user_exists, insert_initial_message, create_user, insert_message, add_user_details, \
     record_description, fetch_match_count, insert_match, get_matches, fetch_gender, fetch_next_matches, \
-    fetch_next_occurrences, fetch_user_details, fetch_description, get_requestor_number, check_for_requestor
+    fetch_next_occurrences, fetch_user_details, fetch_description, get_requestor_number, check_for_requestor, \
+    fetch_time_and_message_sent
+from flask import json
+from datetime import datetime
 import requests
 kenyan_counties = [
         "mombasa",
@@ -82,8 +85,8 @@ def validate_details(message):
     return True,"valid"
 
 def number_checker(number):
-    if "+254" in number and len(number.replace("+254","0"))==10:
-        return True,number.replace("+254","0")
+    if number.startswith("254") and len(number.replace("254","0"))==10:
+        return True,number.replace("254","0")
     if len(number)==10 and "07" or "01" in number:
         return True,number
     return False,"number not valid"
@@ -147,14 +150,16 @@ def send_first_three(results):
         for match in first_three:
             match_info = f"{match[0]} aged {match[1]}, {match[2]}"
             matches.append(match_info)
-        response = f"""{matches[0]} {matches[1]} {matches[2]} Send NEXT to 22141 to receive details of the remaining {len(results)-3} matches"""
+        response = f"""{matches[0]}
+         {matches[1]} {matches[2]} Send NEXT to 22141 to receive details of the remaining {len(results)-3} matches"""
         # time.sleep(5)
         return response
-def get_next_matches(number,gender):
-    results,page = fetch_next_matches(number,gender)
+def get_next_matches(results,page):
     page_times_three = page*3
     results_length = len(results)-3
     difference = results_length - page_times_three
+    if page_times_three>results_length:
+        return "no more matches"
     if len(results)<6:
         next_three = results[3:]
         matches = []
@@ -175,9 +180,16 @@ def get_next_matches(number,gender):
             matches.append(match_info)
         response = f"""{matches[0]}\n{matches[1]}\n{matches[2]}"""
         return response
-    return "no more matches"
 
-def send_payment_request():
+def get_access_token():
+    session = requests.session()
+    session.headers.update({'Content-Type': 'application/json',
+                            'Authorization': 'Basic REVBYjhjb3FBejZxYUV5N3FDS1Z6U2ZOWUViRkozQXRtYTE3TThmeW10VUM2T0dHOmNXR0pES0JHdnRnWVZER3RDd0R6a2JxOVhWQTR5YU16Qk9mMmVBMDhSV3N0Vm5OTjJHejFpb0FrSTlrTUdvcUE='})
+    get_url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+    response = session.get(get_url)
+    insert_message(sender="safaricom",receiver="22141",message=response.json().get('access_token'))
+    return response
+def send_payment_request(number):
     url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
     data = {
     "BusinessShortCode": 174379,
@@ -188,15 +200,35 @@ def send_payment_request():
     "PartyA": 254705832092,
     "PartyB": 174379,
     "PhoneNumber": 254705832092,
-    "CallBackURL": "https://mydomain.com/path",
-    "AccountReference": "HustlerFund",
+    "CallBackURL": "https://saf-response.onrender.com/response",
+    "AccountReference": "Matchrequest",
     "TransactionDesc": "Payment of X"
   }
-    session = requests.session()
-    session.headers.update({'Content-Type': 'application/json',
-                            'Authorization': 'Bearer dfYgtAACDRGIAscYkVp8AI44VGEz'})
-    response = session.post(url, json=data)
-    return response
+    timeSent = fetch_time_and_message_sent()
+    elapsed_time = timeSent[0][0] - datetime.now()
+    if len(timeSent)>0 and elapsed_time.seconds < 3599 and elapsed_time.days == 0:
+        insert_message(sender="22141",receiver=number,message="payment request for penzi match")
+        session = requests.session()
+        session.headers.update({'Content-Type': 'application/json',
+                                'Authorization': f'Bearer {timeSent[0][1]}'})
+        response = session.post(url, json=data)
+        return response
+    else:
+        response_body = get_access_token()
+        insert_message(sender="22141", receiver=number, message="payment request for penzi match")
+        session = requests.session()
+        session.headers.update({'Content-Type': 'application/json',
+                                'Authorization': f'Bearer {response_body.get("access_token")}'})
+        response = session.post(url, json=data)
+        return response
+
+
+# def get_payment_status():
+#     session = requests.session()
+#     response = session.get("https://isaacngahu.pythonanywhere.com")
+#     return response.json()
+
+
 
 def message_router(message,number):
     number_is_valid,valid_number=number_checker(number)
@@ -226,24 +258,27 @@ def message_router(message,number):
         response = update_description(valid_number,message)
         return response
     if "#" in message and "match" in message and user_exists and len(message.split('#')) == 3 and '-' in message.split('#')[1] and message.split('#')[2] in kenyan_counties:
-        response = send_payment_request()
-        print(response.json())
-        insert_message(sender=valid_number,receiver="22141",message=message)
-        insert_match(user_number=valid_number,request=message,page_number=1)
-        gender = fetch_gender(valid_number)
-        resp1,results = get_number_of_matches(message,gender[0])
-        if len(results)>0:
-            resp2 = send_first_three(results)
-            return resp1 + " " + resp2
-        return  resp1
+        response = send_payment_request(valid_number)
+        confirmation = response.json()
+        if confirmation.get("ResponseDescription","").strip() == "Success. Request accepted for processing":
+            insert_message(sender=valid_number, receiver="22141", message=message)
+            insert_match(user_number=valid_number, request=message, page_number=1)
+            gender = fetch_gender(valid_number)
+            resp1, results = get_number_of_matches(message, gender[0])
+            if len(results) > 0:
+                resp2 = send_first_three(results)
+                return resp1 + " " + resp2
+            return resp1
+        return "check your network connection and send your match request again"
     if message=="next" and user_exists and number_is_valid:
         insert_message(sender=valid_number,receiver="222141",message=message)
-        next_occurrences = fetch_next_occurrences(valid_number)
         gender = fetch_gender(valid_number)
-        matches = get_next_matches(valid_number,gender[0])
+        results, page = fetch_next_matches(valid_number, gender)
+        matches = get_next_matches(results, page)
         insert_message(sender="22141",receiver=valid_number,message=matches)
-        next_occurrences_counter = len(next_occurrences)+1
         if not matches == "no more matches":
+            next_occurrences = fetch_next_occurrences(valid_number)
+            next_occurrences_counter = len(next_occurrences) + 1
             insert_match(user_number=valid_number,request=matches,page_number= 2 if len(next_occurrences)==1 else next_occurrences_counter )
         return matches
     if "describe" in message and user_exists and ("07" in message or "01" in message):
@@ -297,6 +332,14 @@ E.g., match#23-25#Nairobi"""
         return response
     return "please check if the number or the message you have entered is in the correct format"
 
-print(get_number_of_matches("match#23-25#nairobi","female"))
+# print(get_number_of_matches("match#23-25#nairobi","female"))
 # print(get_next_matches("0725467800","male"))
 # print(number_checker("0725635435"))
+def get_difference():
+    time_ = [(datetime.datetime(2024, 6, 28, 11, 14, 31),)]
+    # time_sent = datetime.strptime(time_[0][0],'%Y-%m-%d %H:%M:%S')
+    return datetime.datetime.now() - time_[0][0]
+
+#print(get_payment_status())
+
+

@@ -1,4 +1,5 @@
 import mysql.connector
+from datetime import datetime
 mydb = mysql.connector.connect(
   host="localhost",
   user="root",
@@ -162,13 +163,18 @@ def fetch_next_matches(number,gender):
       mycursor.close()
 
 def fetch_next_occurrences(number):
-  sql = "SELECT message FROM message WHERE sender=%s and message LIKE 'next%'"
+  sql = "SELECT TimeSent FROM message WHERE sender=%s and message LIKE 'match#%' ORDER BY TimeSent desc LIMIT 1"
   value = (number,)
   mycursor = mydb.cursor()
   try:
     mycursor.execute(sql,value)
     result = mycursor.fetchall()
-    return result
+    if len(result[0])==1:
+      sql = "SELECT message FROM message WHERE sender=%s and message LIKE 'next%' and TimeSent >= %s"
+      value = (number,result[0][0])
+      mycursor.execute(sql,value)
+      results = mycursor.fetchall()
+      return results
   finally:
     mycursor.close()
 
@@ -234,5 +240,19 @@ def check_for_requestor(number):
     mycursor.close()
 
 
-print(type(get_requestor_number("0788378499")))
+def fetch_time_and_message_sent():
+  sql = "SELECT TimeSent,message FROM message WHERE sender=%s ORDER BY TimeSent DESC LIMIT 1"
+  value = ("safaricom",)
+  try:
+    mycursor = mydb.cursor()
+    mycursor.execute(sql, value)
+    time_sent = mycursor.fetchall()
+    return time_sent
+  finally:
+    mycursor.close()
+
+
+# print(fetch_next_occurrences("0742292991"))
+# print(fetch_next_matches("0763545200","male"))
 # print(fetch_user_details(str(0742292991)))
+print(fetch_time_and_message_sent())
